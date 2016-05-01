@@ -1,0 +1,159 @@
+#! /bin/bash
+###
+#
+# chkconfig: 35 30 50
+# description:  Enables Confluient Platform Kafka service
+#
+### BEGIN INIT INFO
+# Provides:       cp-kafka
+# Required-Start: $network
+# Required-Stop:  $network
+# Should-Start:
+# Should-Stop:
+# Default-Start:  3 5
+# Default-Stop:   0 1 2 6
+# Short-Description: Manage Confluent Platform Kafka service
+### END INIT INFO
+#
+# Simple wrapper to start/stop services as part of
+# the Confluent Platform.   
+#
+#	rpm/deb installation : scripts in /etc/init.d
+#	tar/zip installation : scripts in $TOP/initscripts
+#
+
+
+# Source function library.
+if [ -r /etc/init.d/functions ]; then
+    . /etc/init.d/functions
+fi
+
+# Import LSB log_* and *-daemon functions.
+if [ -r /lib/lsb/init-functions ]; then
+    . /lib/lsb/init-functions
+fi
+
+exitCode=0
+name=cp-kafka-service
+desc="Confluent Platform Kafka daemon"
+
+# These variables __should__ be imported from a well-defined location.
+# For now, we'll set them by some quick searches for the known properties files.
+#
+THIS_SCRIPT="$(readlink -f ${BASH_SOURCE[0]})"
+INIT_HOME=$(dirname $THIS_SCRIPT)
+CONF_HOME=$(dirname $INIT_HOME)
+
+if [ -d $CONF_HOME/bin  -a  -x $CONF_HOME/bin/kafka-server-start ] ; then
+	CONF_KAFKA_BIN=$CONF_HOME/bin
+else
+	CONF_KAFKA_BIN=/usr/bin
+fi
+
+if [ -d $CONF_HOME/etc/kafka ] ; then
+	CONF_KAFKA_ETC=$CONF_HOME/etc/kafka
+else
+	CONF_KAFKA_ETC=/etc/kafka
+fi
+
+CONF_KAFKA_PROPERTIES=${CONF_KAFKA_ETC}/server.properties
+CONF_KAFKA_USER=`stat -c "%U" $CONF_KAFKA_PROPERTIES`
+CONF_KAFKA_CLASS='io.confluent.*.SupportedKafka'
+
+RC_PID_DIR=/var/run
+PIDFILE=$RC_PID_DIR/${name}.pid
+
+RC_LOCK_DIR=/var/lock/subsys
+[ ! -d $RC_LOCK_DIR ] && RC_LOCK_DIR=/var/lock
+LOCKFILE=$RC_LOCK_DIR/${name}
+
+
+do_start() {
+	if which start-stop-daemon &> /dev/null ; then
+		log_daemon_msg "Starting $desc" "$name" 
+		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --exec $CONF_KAFKA_BIN/kafka-server-start -- -daemon $CONF_KAFKA_PROPERTIES
+		exitCode=$?
+		log_end_msg $exitCode
+	else
+		echo -n $"Starting $desc ($name): "
+		daemon --user $CONF_KAFKA_USER --pidfile $PIDFILE $CONF_KAFKA_BIN/kafka-server-start -daemon $CONF_KAFKA_PROPERTIES 
+		exitCode=$?
+		if [ $exitCode -eq 0 ] ; then
+			PID=`pgrep -a -u $CONF_KAFKA_USER java | grep -e $CONF_KAFKA_CLASS | cut -f1 -d' '`
+			echo $PID > $PIDFILE
+		fi
+		echo
+	fi
+	[ $exitCode -eq 0 ] && [ -d $RC_LOCK_DIR ] && touch $LOCKFILE
+	return $exitCode
+}
+
+do_stop() {
+	if which start-stop-daemon &> /dev/null ; then
+		log_daemon_msg "Stopping $desc" "$name" 
+		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE 
+		exitCode=$?
+		log_end_msg $exitCode
+	else
+		echo -n $"Stopping $desc ($name): "
+		if [ -f $PIDFILE ] ; then
+			PID=$(cat $PIDFILE)
+		else
+			PID=`pgrep -a -u $CONF_KAFKA_USER java | grep -e $CONF_KAFKA_CLASS | cut -f1 -d' '`
+		fi
+		[ -n "$PID" ] && kill -9 $PID 
+		exitCode=$?
+		echo
+	fi
+	[ $exitCode -eq 0 ] && rm -f $LOCKFILE $PIDFILE
+}
+
+do_restart() {
+	do_stop
+	sleep 3
+	do_start
+}
+
+do_status(){
+	if which apt-get &> /dev/null ; then
+		status_of_proc -p $PIDFILE $name $name
+		exitCode=$?
+	else
+		status -p $PIDFILE $name
+		exitCode=$?
+	fi
+}
+
+do_condrestart() {
+	[ -e $LOCK_FILE ] && do_restart || :
+	exitCode=$?
+}
+
+case "$1" in
+	start)
+		do_start
+		;;
+	stop)
+		do_stop
+		;;
+	status)
+		do_status
+		;;
+	qstatus)
+		do_qstatus
+		;;
+	restart)
+		do_restart
+		;;
+	condrestart)
+		do_condrestart
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|status|restart|condrestart}"
+		exit 1
+esac
+
+exit $exitCode
+
+
+
