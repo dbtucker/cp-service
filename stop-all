@@ -21,7 +21,7 @@ KAFKA_PIDFILE=$CONF_ETC_TOP/cp-kafka-service.pid
 SCHEMA_PIDFILE=$CONF_ETC_TOP/cp-schema-service.pid
 REST_PIDFILE=$CONF_ETC_TOP/cp-rest-service.pid
 
-CONF_KAFKA_CLASS='io.confluent.*.SupportedKafka'
+CONF_KAFKA_CLASS='io.confluent.support.metrics.SupportedKafka'
 CONF_SCHEMA_CLASS='io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain'
 CONF_REST_CLASS='io.confluent.kafkarest.KafkaRestMain'
 
@@ -30,6 +30,7 @@ CONF_REST_CLASS='io.confluent.kafkarest.KafkaRestMain'
 #	$1: PID file
 #	$2: unique string from Java invocation
 #	$3: service name [optional]
+#	$4: sleep time in second after shutdown [optional; defaults to 3 seconds]
 
 function stop_cp_service() {
 	echo -n "Shutting down ${3} service ... "
@@ -39,8 +40,8 @@ function stop_cp_service() {
 	else
 		PID=`pgrep -fl java | grep -e ${2:-java} | cut -f1 -d' '`
 	fi
-	[ -n "$PID" ] && kill -9 $PID && rm -f $PIDFILE
-	sleep 3
+	[ -n "$PID" ] && kill -9 $PID && rm -f $PIDFILE && sleep ${4:-3}
+
 	echo "done"
 }
 
@@ -50,44 +51,4 @@ stop_cp_service $KAFKA_PIDFILE $CONF_KAFKA_CLASS "Kafka"
 stop_cp_service $ZK_PIDFILE `basename $CONF_ZK_PROPERTIES` "Zookeeper"
 
 exit 0
-
-echo -n "Shutting down REST service ... "
-if [ -f $REST_PIDFILE ] ; then
-	PID=$(cat $REST_PIDFILE)
-else
-	PID=`pgrep -fl java | grep -e $CONF_REST_CLASS | cut -f1 -d' '`
-fi
-[ -n "$PID" ] && kill -9 $PID && rm -f $REST_PIDFILE
-sleep 3
-echo "done"
-
-echo -n "Shutting down Schema Registry service ... "
-if [ -f $SCHEMA_PIDFILE ] ; then
-	PID=$(cat $SCHEMA_PIDFILE)
-else
-	PID=`pgrep -fl java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
-fi
-[ -n "$PID" ] && kill -9 $PID && rm -f $SCHEMA_PIDFILE
-sleep 3
-echo "done"
-
-echo -n "Shutting down Kafka service ... "
-if [ -f $KAFKA_PIDFILE ] ; then
-	PID=$(cat $KAFKA_PIDFILE)
-else
-	PID=`pgrep -fl java | grep -e $CONF_KAFKA_CLASS | cut -f1 -d' '`
-fi
-[ -n "$PID" ] && kill -9 $PID && rm -f $KAFKA_PIDFILE
-sleep 3
-echo "done"
-
-echo -n "Shutting down Zookeeper service ... "
-if [ -f $ZK_PIDFILE ] ; then
-	PID=$(cat $ZK_PIDFILE)
-else
-	PID=`pgrep -fl java | grep -e `basename $CONF_ZK_PROPERTIES` | cut -f1 -d' '`
-fi
-[ -n "$PID" ] && kill -9 $PID && rm -f $ZK_PIDFILE
-sleep 3
-echo "done"
 

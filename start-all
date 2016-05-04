@@ -26,23 +26,35 @@ CONF_SCHEMA_CLASS='io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain'
 CONF_REST_CLASS='io.confluent.kafkarest.KafkaRestMain'
 
 
-echo -n "Starting up Confluent Platform Zookeeper service ...""
-$BIN_DIR/zookeeper-server-start -daemon $CONF_ZK_PROPERTIES
-if [ $? -eq 0 ] ; then
-	PROPS=`basename $CONF_ZK_PROPERTIES`
-	PID=`pgrep -fl java | grep -e $PROPS | cut -f1 -d' '`
-    [ -n "${PID}" ] && echo $PID > $ZK_PIDFILE
-else
-	exit 1
-fi
-sleep 5
-echo "done"
+startZK=1
+if [ $startZK -eq 1 ] ; then
+	echo -n "Starting up Confluent Platform Zookeeper service ..."
+	$BIN_DIR/zookeeper-server-start -daemon $CONF_ZK_PROPERTIES
+	if [ $? -eq 0 ] ; then
+		PROPS=`basename $CONF_ZK_PROPERTIES`
+		PID=`pgrep -fl java | grep -e $PROPS | cut -f1 -d' '`
+    	[ -n "${PID}" ] && echo $PID > $ZK_PIDFILE
 
-echo -n "Starting up Confluent Platform Kafka service ...""
+		eval $(grep ^clientPort ${CONF_ZK_PROPERTIES})
+		zkstatus=""
+		while [ "$zkstatus" != "imok" ] ; do
+			sleep 5
+			zkstatus=`echo ruok | nc localhost $clientPort`
+			[ $? -ne 0 ] && echo " ... waiting for ZK to come on line"
+		done
+		sleep 10		# ZK takes a LONG time to get happy
+	else
+		exit 1
+	fi
+	echo "done"
+fi
+
+echo -n "Starting up Confluent Platform Kafka service ..."
 $BIN_DIR/kafka-server-start -daemon $CONF_KAFKA_PROPERTIES
 if [ $? -eq 0 ] ; then
 	PID=`pgrep -fl java | grep -e $CONF_KAFKA_CLASS | cut -f1 -d' '`
     [ -n "${PID}" ] && echo $PID > $KAFKA_PIDFILE
+	sleep 5
 else
 	exit 1
 fi
@@ -52,7 +64,10 @@ $BIN_DIR/schema-registry-run-class $CONF_SCHEMA_CLASS -daemon $CONF_SCHEMA_PROPE
 if [ $? -eq 0 ] ; then
 	PID=`pgrep -fl java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
     [ -n "${PID}" ] && echo $PID > $SCHEMA_PIDFILE
+	echo "Confluent Platform Schema Registry launched"
+	sleep 3
 else
+	echo "Confluent Platform Schema Registry FAILED to launch"
 	exit 1
 fi
 
@@ -60,7 +75,10 @@ $BIN_DIR/kafka-rest-run-class $CONF_REST_CLASS -daemon $CONF_REST_PROPERTIES
 if [ $? -eq 0 ] ; then
 	PID=`pgrep -fl java | grep -e $CONF_REST_CLASS | cut -f1 -d' '`
     [ -n "${PID}" ] && echo $PID > $REST_PIDFILE
+	echo "Confluent Platform REST Interface Service launched"
 else
+	echo "Confluent Platform REST Interface Service FAILED to launch"
 	exit 1
 fi
 
+exit 0
