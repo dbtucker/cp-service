@@ -140,7 +140,7 @@ fi
 if [ $rpid -gt 0 ] ; then
 	echo "Confluent Platform REST Interface service running as pid $rpid"
 else
-	start_schema_registry
+	start_rest_service
 fi
 
 set +x
