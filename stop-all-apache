@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# OSX brew has a readlink equivalent (installed via 
+# 'brew install coreutils')
+#
+READLINK=readlink
+which greadlink &> /dev/null  &&  READLINK=greadlink
+
+THIS_SCRIPT="$(${READLINK} -f ${BASH_SOURCE[0]})"
+BIN_DIR=$(dirname ${THIS_SCRIPT})
+CONF_HOME=$(dirname ${BIN_DIR})
+CONF_ETC_TOP=$CONF_HOME/etc
+
+CONF_ZK_PROPERTIES=${CONF_ETC_TOP}/kafka/zookeeper.properties
+CONF_KAFKA_PROPERTIES=${CONF_ETC_TOP}/kafka/server.properties
+CONF_REST_PROPERTIES=${CONF_ETC_TOP}/kafka-rest/kafka-rest.properties
+CONF_SCHEMA_PROPERTIES=${CONF_ETC_TOP}/schema-registry/schema-registry.properties
+
+ZK_PIDFILE=$CONF_ETC_TOP/cp-zk-service.pid
+KAFKA_PIDFILE=$CONF_ETC_TOP/cp-kafka-service.pid
+SCHEMA_PIDFILE=$CONF_ETC_TOP/cp-schema-service.pid
+REST_PIDFILE=$CONF_ETC_TOP/cp-rest-service.pid
+
+CONF_KAFKA_CLASS='kafka.Kafka'
+CONF_SCHEMA_CLASS='io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain'
+CONF_REST_CLASS='io.confluent.kafkarest.KafkaRestMain'
+
+
+# Simple function to shut down the CP Java service based on
+#	$1: PID file
+#	$2: unique string from Java invocation
+#	$3: service name [optional]
+#	$4: sleep time in second after shutdown [optional; defaults to 3 seconds]
+
+function stop_cp_service() {
+	echo -n "Shutting down ${3} service ... "
+	PIDFILE=$1
+	if [ -f $PIDFILE ] ; then
+		PID=$(cat $PIDFILE)
+	else
+		PID=`pgrep -fl java | grep -e ${2:-java} | cut -f1 -d' '`
+	fi
+	[ -n "$PID" ] && kill -9 $PID && rm -f $PIDFILE && sleep ${4:-3}
+
+	echo "done"
+}
+
+stop_cp_service $REST_PIDFILE $CONF_REST_CLASS "REST"
+stop_cp_service $SCHEMA_PIDFILE $CONF_SCHEMA_CLASS "Schema Registry"
+stop_cp_service $KAFKA_PIDFILE $CONF_KAFKA_CLASS "Kafka"
+stop_cp_service $ZK_PIDFILE `basename $CONF_ZK_PROPERTIES` "Zookeeper"
+
+exit 0
+

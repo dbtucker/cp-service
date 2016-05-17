@@ -1,0 +1,146 @@
+#!/bin/bash
+
+set -x
+
+# OSX brew has a readlink equivalent (installed via 
+# 'brew install coreutils')
+#
+READLINK=readlink
+which greadlink &> /dev/null  &&  READLINK=greadlink
+
+THIS_SCRIPT="$(${READLINK} -f ${BASH_SOURCE[0]})"
+BIN_DIR=$(dirname ${THIS_SCRIPT})
+CONF_HOME=$(dirname ${BIN_DIR})
+CONF_ETC_TOP=$CONF_HOME/config
+
+CONF_ZK_PROPERTIES=${CONF_ETC_TOP}/zookeeper.properties
+CONF_KAFKA_PROPERTIES=${CONF_ETC_TOP}/server.properties
+CONF_REST_PROPERTIES=${CONF_ETC_TOP}/kafka-rest/kafka-rest.properties
+CONF_SCHEMA_PROPERTIES=${CONF_ETC_TOP}/schema-registry/schema-registry.properties
+
+ZK_PIDFILE=$CONF_ETC_TOP/cp-zk-service.pid
+KAFKA_PIDFILE=$CONF_ETC_TOP/cp-kafka-service.pid
+SCHEMA_PIDFILE=$CONF_ETC_TOP/cp-schema-service.pid
+REST_PIDFILE=$CONF_ETC_TOP/cp-rest-service.pid
+
+CONF_KAFKA_CLASS='kafka.Kafka'
+CONF_SCHEMA_CLASS='io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain'
+CONF_REST_CLASS='io.confluent.kafkarest.KafkaRestMain'
+
+start_zookeeper() {
+	echo -n "Starting up Confluent Platform Zookeeper service ..."
+	$BIN_DIR/zookeeper-server-start.sh -daemon $CONF_ZK_PROPERTIES
+	if [ $? -eq 0 ] ; then
+		PROPS=`basename $CONF_ZK_PROPERTIES`
+		PID=`pgrep -fl java | grep -e $PROPS | cut -f1 -d' '`
+    	[ -n "${PID}" ] && echo $PID > $ZK_PIDFILE
+
+		eval $(grep ^clientPort ${CONF_ZK_PROPERTIES})
+		zkstatus=""
+		while [ "$zkstatus" != "imok" ] ; do
+			sleep 5
+			zkstatus=`echo ruok | nc localhost $clientPort`
+			[ $? -ne 0 ] && echo " ... waiting for ZK to come on line"
+		done
+		sleep 10		# ZK takes a LONG time to get happy
+	else
+		exit 1
+	fi
+	echo "done"
+}
+
+start_kafka() {
+	echo -n "Starting up Confluent Platform Kafka service ..."
+	$BIN_DIR/kafka-server-start.sh -daemon $CONF_KAFKA_PROPERTIES
+	if [ $? -eq 0 ] ; then
+		PID=`pgrep -fl java | grep -e $CONF_KAFKA_CLASS | cut -f1 -d' '`
+    	[ -n "${PID}" ] && echo $PID > $KAFKA_PIDFILE
+		sleep 5
+	else
+		exit 1
+	fi
+	echo "done"
+}
+
+start_schema_registry() {
+	$BIN_DIR/schema-registry-run-class $CONF_SCHEMA_CLASS -daemon $CONF_SCHEMA_PROPERTIES
+	if [ $? -eq 0 ] ; then
+		PID=`pgrep -fl java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
+    	[ -n "${PID}" ] && echo $PID > $SCHEMA_PIDFILE
+		echo "Confluent Platform Schema Registry launched"
+		sleep 3
+	else
+		echo "Confluent Platform Schema Registry FAILED to launch"
+		exit 1
+	fi
+}
+
+start_rest_service() {
+	$BIN_DIR/kafka-rest-run-class.sh $CONF_REST_CLASS -daemon $CONF_REST_PROPERTIES
+	if [ $? -eq 0 ] ; then
+		PID=`pgrep -fl java | grep -e $CONF_REST_CLASS | cut -f1 -d' '`
+    	[ -n "${PID}" ] && echo $PID > $REST_PIDFILE
+		echo "Confluent Platform REST Interface Service launched"
+	else
+		echo "Confluent Platform REST Interface Service FAILED to launch"
+		exit 1
+	fi
+}
+
+startZK=1
+if [ $startZK -eq 1 ] ; then
+	zkpid=0
+	[ -r $ZK_PIDFILE ] && zkpid=$(cat $ZK_PIDFILE)
+	if [ $zkpid -gt 0 ] ; then
+		PROPS=`basename $CONF_ZK_PROPERTIES`
+		ps -p $zkpid | grep -q -e $PROPS
+		[ $? -ne 0 ] && zkpid=0
+	fi
+
+	if [ $zkpid -gt 0 ] ; then
+		echo "Confluent Platform Zookeeper service running as pid $zkpid"
+	else
+		start_zookeeper
+	fi
+fi
+
+kpid=0
+[ -r $KAFKA_PIDFILE ] && kpid=$(cat $KAFKA_PIDFILE)
+if [ $kpid -gt 0 ] ; then
+	ps -p $kpid | grep -q -e $CONF_KAFKA_CLASS
+	[ $? -ne 0 ] && kpid=0
+fi
+
+if [ $kpid -gt 0 ] ; then
+	echo "Confluent Platform Kafka service running as pid $kpid"
+else
+	start_kafka
+fi
+
+srpid=0
+[ -r $SCHEMA_PIDFILE ] && srpid=$(cat $SCHEMA_PIDFILE)
+if [ $srpid -gt 0 ] ; then
+	ps -p $srpid | grep -q -e $CONF_SCHEMA_CLASS
+	[ $? -ne 0 ] && srpid=0
+fi
+
+if [ $srpid -gt 0 ] ; then
+	echo "Confluent Platform Schema Registry service running as pid $srpid"
+else
+	start_schema_registry
+fi
+
+rpid=0
+[ -r $REST_PIDFILE ] && rpid=$(cat $REST_PIDFILE)
+if [ $rpid -gt 0 ] ; then
+	ps -p $rpid | grep -q -e $CONF_REST_CLASS
+	[ $? -ne 0 ] && rpid=0
+fi
+
+if [ $rpid -gt 0 ] ; then
+	echo "Confluent Platform REST Interface service running as pid $rpid"
+else
+	start_rest_service
+fi
+
+set +x
