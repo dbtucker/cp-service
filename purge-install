@@ -51,7 +51,13 @@ purge_kafka() {
 	logDirs=${logDirs#*=}
 	if [ -n "$logDirs" ] ; then
 		for d in ${logDirs//,/ } ; do
-			[ $d != "/" ] && rm -rf $d
+			if [ $d != "/" ] ; then
+				if [ -h $d ] ; then
+					rm -rf $d/*
+				else
+					rm -rf $d
+				fi
+			fi
 		done
 	fi
 }
