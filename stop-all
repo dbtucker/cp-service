@@ -31,13 +31,28 @@ CONF_REST_CLASS='io.confluent.kafkarest.KafkaRestMain'
 #	$2: unique string from Java invocation
 #	$3: service name [optional]
 #	$4: sleep time in second after shutdown [optional; defaults to 3 seconds]
+#
+# Logic :
+#	If PID_FILE is passed in and valid, use that to identify a PID.
+#	Otherwise, use the unique string to track down the PID
+#		A "service name" specification will take precedence over a "grep'ed" PID
 
 function stop_cp_service() {
 	echo -n "Shutting down ${3} service ... "
 	PIDFILE=$1
 	if [ -f $PIDFILE ] ; then
 		PID=$(cat $PIDFILE)
-	else
+	fi
+	if [ -z "${PID:-}" ] ; then
+		if [ -n "$3" ] ; then
+			service $3 status &> /dev/null
+			if [ $? -eq 0 ] ; then
+				service $3 stop &> /dev/null
+				[ $? -eq 0 ] && rm -f $PIDFILE && sleep ${4:-3}
+				echo "done"
+				return
+			fi
+		fi
 		PID=`pgrep -fl java | grep -e ${2:-java} | cut -f1 -d' '`
 	fi
 	[ -n "$PID" ] && kill -9 $PID && rm -f $PIDFILE && sleep ${4:-3}
@@ -45,10 +60,10 @@ function stop_cp_service() {
 	echo "done"
 }
 
-stop_cp_service $REST_PIDFILE $CONF_REST_CLASS "REST"
-stop_cp_service $SCHEMA_PIDFILE $CONF_SCHEMA_CLASS "Schema Registry"
-stop_cp_service $KAFKA_PIDFILE $CONF_KAFKA_CLASS "Kafka"
-stop_cp_service $ZK_PIDFILE `basename $CONF_ZK_PROPERTIES` "Zookeeper"
+stop_cp_service $REST_PIDFILE $CONF_REST_CLASS "cp-rest-service"
+stop_cp_service $SCHEMA_PIDFILE $CONF_SCHEMA_CLASS "cp-schema-service"
+stop_cp_service $KAFKA_PIDFILE $CONF_KAFKA_CLASS "cp-kafka-service"
+stop_cp_service $ZK_PIDFILE `basename $CONF_ZK_PROPERTIES` "cp-zk-service"
 
 exit 0
 
