@@ -18,6 +18,10 @@
 # Simple wrapper to start/stop services as part of
 # the Confluent Platform.   
 #
+#	rpm/deb installation : scripts in /etc/init.d
+#	tar/zip installation : scripts in $TOP/initscripts
+#
+#
 
 
 # Source function library.
@@ -34,9 +38,25 @@ exitCode=0
 name=cp-rest-service
 desc="Confluent Platform REST Service"
 
-# These variables __should__ be imported from a well-defined location
-CONF_KAFKA_BIN=/usr/bin
-CONF_REST_ETC=/etc/kafka-rest
+# These variables __should__ be imported from a well-defined location.
+# For now, we'll set them by some quick searches for the known properties files.
+#
+THIS_SCRIPT="$(readlink -f ${BASH_SOURCE[0]})"
+INIT_HOME=$(dirname $THIS_SCRIPT)
+CONF_HOME=$(dirname $INIT_HOME)
+
+if [ -d $CONF_HOME/bin  -a  -x $CONF_HOME/bin/kafka-server-start ] ; then
+	CONF_KAFKA_BIN=$CONF_HOME/bin
+else
+	CONF_KAFKA_BIN=/usr/bin
+fi
+
+if [ -d $CONF_HOME/etc/kafka-rest ] ; then
+	CONF_REST_ETC=$CONF_HOME/etc/kafka-rest
+else
+	CONF_REST_ETC=/etc/kafka-rest
+fi
+
 CONF_REST_PROPERTIES=${CONF_REST_ETC}/kafka-rest.properties
 CONF_REST_USER=`stat -c "%U" $CONF_REST_PROPERTIES`
 CONF_REST_CLASS='io.confluent.kafkarest.KafkaRestMain'

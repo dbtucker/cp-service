@@ -18,6 +18,9 @@
 # Simple wrapper to start/stop services as part of
 # the Confluent Platform.   
 #
+#	rpm/deb installation : scripts in /etc/init.d
+#	tar/zip installation : scripts in $TOP/initscripts
+#
 
 
 # Source function library.
@@ -35,8 +38,24 @@ name=cp-schema-service
 desc="CP Schema Registry daemon"
 
 # These variables __should__ be imported from a well-defined location
-CONF_KAFKA_BIN=/usr/bin
-CONF_SCHEMA_ETC=/etc/schema-registry
+# For now, we'll set them by some quick searches for the known properties files.
+#
+THIS_SCRIPT="$(readlink -f ${BASH_SOURCE[0]})"
+INIT_HOME=$(dirname $THIS_SCRIPT)
+CONF_HOME=$(dirname $INIT_HOME)
+
+if [ -d $CONF_HOME/bin  -a  -x $CONF_HOME/bin/kafka-server-start ] ; then
+	CONF_KAFKA_BIN=$CONF_HOME/bin
+else
+	CONF_KAFKA_BIN=/usr/bin
+fi
+
+if [ -d $CONF_HOME/etc/schema-registry ] ; then
+	CONF_SCHEMA_ETC=$CONF_HOME/etc/schema-registry
+else
+	CONF_SCHEMA_ETC=/etc/schema-registry
+fi
+
 CONF_SCHEMA_PROPERTIES=${CONF_SCHEMA_ETC}/schema-registry.properties
 CONF_SCHEMA_USER=`stat -c "%U" $CONF_SCHEMA_PROPERTIES`
 CONF_SCHEMA_CLASS='io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain'
