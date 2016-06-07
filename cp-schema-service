@@ -121,9 +121,6 @@ case "$1" in
 	status)
 		do_status
 		;;
-	qstatus)
-		do_qstatus
-		;;
 	restart)
 		do_restart
 		;;
