@@ -1,0 +1,136 @@
+#! /bin/bash
+###
+#
+# chkconfig: 35 35 45
+# description:  Enables Confluient Platform Schema Registry service
+#
+### BEGIN INIT INFO
+# Provides:       control-center-service
+# Required-Start: $network
+# Required-Stop:  $network
+# Should-Start:
+# Should-Stop:
+# Default-Start:  3 5
+# Default-Stop:   0 1 2 6
+# Short-Description: Mangage Confluent Control Center service
+### END INIT INFO
+#
+# Simple wrapper to start/stop services as part of
+# the Confluent Platform.   
+#
+#	rpm/deb installation : scripts in /etc/init.d
+#	tar/zip installation : scripts in $TOP/initscripts
+#
+
+
+# Source function library.
+if [ -r /etc/init.d/functions ]; then
+    . /etc/init.d/functions
+fi
+
+# Import LSB log_* and *-daemon functions.
+if [ -r /lib/lsb/init-functions ]; then
+    . /lib/lsb/init-functions
+fi
+
+exitCode=0
+name=control-center-service
+desc="Confluent Control Center"
+
+# These variables __should__ be imported from a well-defined location
+# For now, we'll set them by some quick searches for the known properties files.
+#
+THIS_SCRIPT="$(readlink -f ${BASH_SOURCE[0]})"
+INIT_HOME=$(dirname $THIS_SCRIPT)
+CONF_HOME=$(dirname $INIT_HOME)
+
+if [ -d $CONF_HOME/bin  -a  -x $CONF_HOME/bin/control-center-start ] ; then
+	CONF_KAFKA_BIN=$CONF_HOME/bin
+else
+	CONF_KAFKA_BIN=/usr/bin
+fi
+
+if [ -d $CONF_HOME/etc/confluent-control-center ] ; then
+	CONF_C3_ETC=$CONF_HOME/etc/confluent-control-center
+else
+	CONF_C3_ETC=/etc/confluent-control-center
+fi
+
+CONF_C3_PROPERTIES=${CONF_C3_ETC}/control-center.properties
+CONF_C3_USER=`stat -c "%U" $CONF_C3_PROPERTIES`
+CONF_C3_CLASS='io.confluent.controlcenter.ControlCenter'
+
+RC_PID_DIR=/var/run
+PIDFILE=$RC_PID_DIR/${name}.pid
+
+RC_LOCK_DIR=/var/lock/subsys
+[ ! -d $RC_LOCK_DIR ] && RC_LOCK_DIR=/var/lock
+LOCKFILE=$RC_LOCK_DIR/${name}
+
+
+do_start() {
+	echo -n $"Starting $desc ($name): "
+	daemon --user $CONF_C3_USER --pidfile $PIDFILE $CONF_KAFKA_BIN/control-center-start -daemon $CONF_C3_PROPERTIES 
+	exitCode=$?
+	if [ $exitCode -eq 0 ] ; then
+		PID=`pgrep -a -u $CONF_C3_USER java | grep -e $CONF_C3_CLASS | cut -f1 -d' '`
+		echo $PID > $PIDFILE
+		exitCode=0
+	fi
+	echo
+	[ $exitCode -eq 0 ] && [ -d $RC_LOCK_DIR ] && touch $LOCKFILE
+	return $exitCode
+}
+
+do_stop() {
+	echo -n $"Stopping $desc ($name): "
+	if [ -f $PIDFILE ] ; then
+		PID=$(cat $PIDFILE)
+	else
+		PID=`pgrep -a -u $CONF_C3_USER java | grep -e $CONF_C3_CLASS | cut -f1 -d' '`
+	fi
+	[ -n "$PID" ] && kill -9 $PID 
+	exitCode=$?
+	echo
+	[ $exitCode -eq 0 ] && rm -f $LOCKFILE $PIDFILE
+}
+
+do_restart() {
+	do_stop
+	sleep 3
+	do_start
+}
+
+do_status(){
+	status -p $PIDFILE $name
+	exitCode=$?
+}
+
+do_condrestart() {
+	[ -e $LOCK_FILE ] && do_restart || :
+	exitCode=$?
+}
+
+case "$1" in
+	start)
+		do_start
+		;;
+	stop)
+		do_stop
+		;;
+	status)
+		do_status
+		;;
+	restart)
+		do_restart
+		;;
+	condrestart)
+		do_condrestart
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|status|restart|condrestart}"
+		exit 1
+esac
+
+exit $exitCode
+
