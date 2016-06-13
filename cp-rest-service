@@ -88,7 +88,7 @@ do_stop() {
 	if [ -f $PIDFILE ] ; then
 		PID=$(cat $PIDFILE)
 	else
-		PID=`pgrep -a -u $CONF_KAFKA_USER java | grep -e $CONF_REST_CLASS | cut -f1 -d' '`
+		PID=`pgrep -a -u $CONF_REST_USER java | grep -e $CONF_REST_CLASS | cut -f1 -d' '`
 	fi
 	[ -n "$PID" ] && kill -9 $PID 
 	exitCode=$?
