@@ -69,29 +69,43 @@ LOCKFILE=$RC_LOCK_DIR/${name}
 
 
 do_start() {
-	echo -n $"Starting $desc ($name): "
-	daemon --user $CONF_SCHEMA_USER --pidfile $PIDFILE $CONF_KAFKA_BIN/schema-registry-run-class $CONF_SCHEMA_CLASS -daemon $CONF_SCHEMA_PROPERTIES 
-	exitCode=$?
-	if [ $exitCode -eq 0 ] ; then
-		PID=`pgrep -a -u $CONF_SCHEMA_USER java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
-		echo $PID > $PIDFILE
-		exitCode=0
+	if which start-stop-daemon &> /dev/null ; then
+		log_daemon_msg "Starting $desc" "$name" 
+		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --exec $CONF_KAFKA_BIN/schema-registry-run-class -- $CONF_SCHEMA_CLASS -daemon $CONF_SCHEMA_PROPERTIES
+		exitCode=$?
+		log_end_msg $exitCode
+	else
+		echo -n $"Starting $desc ($name): "
+		daemon --user $CONF_SCHEMA_USER --pidfile $PIDFILE $CONF_KAFKA_BIN/schema-registry-run-class $CONF_SCHEMA_CLASS -daemon $CONF_SCHEMA_PROPERTIES 
+		exitCode=$?
+		if [ $exitCode -eq 0 ] ; then
+			PID=`pgrep -a -u $CONF_SCHEMA_USER java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
+			echo $PID > $PIDFILE
+			exitCode=0
+		fi
+		echo 
 	fi
-	echo
 	[ $exitCode -eq 0 ] && [ -d $RC_LOCK_DIR ] && touch $LOCKFILE
 	return $exitCode
 }
 
 do_stop() {
-	echo -n $"Stopping $desc ($name): "
-	if [ -f $PIDFILE ] ; then
-		PID=$(cat $PIDFILE)
+	if which start-stop-daemon &> /dev/null ; then
+		log_daemon_msg "Stopping $desc" "$name" 
+		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE 
+		exitCode=$?
+		log_end_msg $exitCode
 	else
-		PID=`pgrep -a -u $CONF_SCHEMA_USER java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
+		echo -n $"Stopping $desc ($name): "
+		if [ -f $PIDFILE ] ; then
+			PID=$(cat $PIDFILE)
+		else
+			PID=`pgrep -a -u $CONF_SCHEMA_USER java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
+		fi
+		[ -n "$PID" ] && kill -9 $PID 
+		exitCode=$?
+		echo
 	fi
-	[ -n "$PID" ] && kill -9 $PID 
-	exitCode=$?
-	echo
 	[ $exitCode -eq 0 ] && rm -f $LOCKFILE $PIDFILE
 }
 
@@ -102,8 +116,13 @@ do_restart() {
 }
 
 do_status(){
-	status -p $PIDFILE $name
-	exitCode=$?
+	if which apt-get &> /dev/null ; then
+		status_of_proc -p $PIDFILE $name $name
+		exitCode=$?
+	else
+		status -p $PIDFILE $name
+		exitCode=$?
+	fi
 }
 
 do_condrestart() {

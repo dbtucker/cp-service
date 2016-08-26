@@ -1,18 +1,18 @@
 #! /bin/bash
 ###
 #
-# chkconfig: 35 31 49
-# description:  Enables Confluent Platform REST service
+# chkconfig: 35 32 48
+# description:  Enables Confluent Platform Connect service
 #
 ### BEGIN INIT INFO
-# Provides:       cp-rest-service
+# Provides:       cp-connect-service
 # Required-Start: $network
 # Required-Stop:  $network
 # Should-Start:
 # Should-Stop:
 # Default-Start:  3 5
 # Default-Stop:   0 1 2 6
-# Short-Description: Mangage Confluent Platform REST service
+# Short-Description: Mangage Confluent Platform Connect Workers
 ### END INIT INFO
 #
 # Simple wrapper to start/stop services as part of
@@ -35,8 +35,8 @@ if [ -r /lib/lsb/init-functions ]; then
 fi
 
 exitCode=0
-name=cp-rest-service
-desc="Confluent Platform REST Service"
+name=cp-connect-service
+desc="Confluent Platform Connect Service"
 
 # These variables __should__ be imported from a well-defined location.
 # For now, we'll set them by some quick searches for the known properties files.
@@ -51,15 +51,15 @@ else
 	CONF_KAFKA_BIN=/usr/bin
 fi
 
-if [ -d $CONF_HOME/etc/kafka-rest ] ; then
-	CONF_REST_ETC=$CONF_HOME/etc/kafka-rest
+if [ -d $CONF_HOME/etc/kafka ] ; then
+	CONF_CONNECT_ETC=$CONF_HOME/etc/kafka
 else
-	CONF_REST_ETC=/etc/kafka-rest
+	CONF_CONNECT_ETC=/etc/kafka
 fi
 
-CONF_REST_PROPERTIES=${CONF_REST_ETC}/kafka-rest.properties
-CONF_REST_USER=`stat -c "%U" $CONF_REST_PROPERTIES`
-CONF_REST_CLASS='io.confluent.kafkarest.KafkaRestMain'
+CONF_CONNECT_PROPERTIES=${CONF_CONNECT_ETC}/connect-distributed.properties
+CONF_CONNECT_USER=`stat -c "%U" $CONF_CONNECT_PROPERTIES`
+CONF_CONNECT_CLASS='org.apache.kafka.connect.cli.ConnectDistributed'
 
 RC_PID_DIR=/var/run
 PIDFILE=$RC_PID_DIR/${name}.pid
@@ -69,18 +69,23 @@ RC_LOCK_DIR=/var/lock/subsys
 LOCKFILE=$RC_LOCK_DIR/${name}
 
 
+# The Connect worker has a problem with empty CLASSPATH
+# specifications (it results in CWD being scanned for all
+# jar files during start-up).   This is VERY BAD.   For a
+# workaround, we simply set CLASSPATH to a bogus value here.
 do_start() {
+	[ -z "$CLASSPATH" ] && export CLASSPATH=/tmp/NOPATH
 	if which start-stop-daemon &> /dev/null ; then
 		log_daemon_msg "Starting $desc" "$name" 
-		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --exec $CONF_KAFKA_BIN/kafka-rest-run-class -- $CONF_REST_CLASS -daemon $CONF_REST_PROPERTIES
+		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --exec $CONF_KAFKA_BIN/connect-distributed -- -daemon $CONF_CONNECT_PROPERTIES
 		exitCode=$?
 		log_end_msg $exitCode
 	else
 		echo -n $"Starting $desc ($name): "
-		daemon --user $CONF_REST_USER --pidfile $PIDFILE $CONF_KAFKA_BIN/kafka-rest-run-class $CONF_REST_CLASS -daemon $CONF_REST_PROPERTIES 
+		daemon --user $CONF_CONNECT_USER --pidfile $PIDFILE $CONF_KAFKA_BIN/connect-distributed -daemon $CONF_CONNECT_PROPERTIES 
 		exitCode=$?
 		if [ $exitCode -eq 0 ] ; then
-			PID=`pgrep -a -u $CONF_REST_USER java | grep -e $CONF_REST_CLASS | cut -f1 -d' '`
+			PID=`pgrep -a -u $CONF_CONNECT_USER java | grep -e $CONF_CONNECT_CLASS | cut -f1 -d' '`
 			echo $PID > $PIDFILE
 			exitCode=0
 		fi
@@ -101,7 +106,7 @@ do_stop() {
 		if [ -f $PIDFILE ] ; then
 			PID=$(cat $PIDFILE)
 		else
-			PID=`pgrep -a -u $CONF_REST_USER java | grep -e $CONF_REST_CLASS | cut -f1 -d' '`
+			PID=`pgrep -a -u $CONF_CONNECT_USER java | grep -e $CONF_CONNECT_CLASS | cut -f1 -d' '`
 		fi
 		[ -n "$PID" ] && kill -9 $PID 
 		exitCode=$?
