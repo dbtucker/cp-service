@@ -8,8 +8,8 @@
 # Provides:       cp-schema-reg
 # Required-Start: $network
 # Required-Stop:  $network
-# Should-Start:
-# Should-Stop:
+# Should-Start: cp-kafka
+# Should-Stop: cp-kafka
 # Default-Start:  3 5
 # Default-Stop:   0 1 2 6
 # Short-Description: Mangage Confluent Platform Schema Registry service
@@ -71,19 +71,21 @@ LOCKFILE=$RC_LOCK_DIR/${name}
 do_start() {
 	if which start-stop-daemon &> /dev/null ; then
 		log_daemon_msg "Starting $desc" "$name" 
-		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --exec $CONF_KAFKA_BIN/schema-registry-run-class -- $CONF_SCHEMA_CLASS -daemon $CONF_SCHEMA_PROPERTIES
+		start-stop-daemon --quiet --chuid $CONF_SCHEMA_USER --pidfile $PIDFILE --exec $CONF_KAFKA_BIN/schema-registry-run-class --start -- $CONF_SCHEMA_CLASS -daemon $CONF_SCHEMA_PROPERTIES
 		exitCode=$?
 		log_end_msg $exitCode
 	else
 		echo -n $"Starting $desc ($name): "
 		daemon --user $CONF_SCHEMA_USER --pidfile $PIDFILE $CONF_KAFKA_BIN/schema-registry-run-class $CONF_SCHEMA_CLASS -daemon $CONF_SCHEMA_PROPERTIES 
 		exitCode=$?
-		if [ $exitCode -eq 0 ] ; then
-			PID=`pgrep -a -u $CONF_SCHEMA_USER java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
-			echo $PID > $PIDFILE
-			exitCode=0
-		fi
 		echo 
+	fi
+
+		# Because the startup scripts use nohup, we have to
+		# do our own computation of PID here.
+	if [ $exitCode -eq 0 ] ; then
+		PID=`pgrep -a -u $CONF_SCHEMA_USER java | grep -e $CONF_SCHEMA_CLASS | cut -f1 -d' '`
+		echo $PID > $PIDFILE
 	fi
 	[ $exitCode -eq 0 ] && [ -d $RC_LOCK_DIR ] && touch $LOCKFILE
 	return $exitCode

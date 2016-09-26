@@ -5,7 +5,7 @@
 # description:  Enables Confluent Platform Zookeeper service
 #
 ### BEGIN INIT INFO
-# Provides:       cp-zk-service
+# Provides:       cp-zookeeper
 # Required-Start: $network
 # Required-Stop:  $network
 # Should-Start:
@@ -70,19 +70,22 @@ LOCKFILE=$RC_LOCK_DIR/${name}
 do_start() {
 	if which start-stop-daemon &> /dev/null ; then
 		log_daemon_msg "Starting $desc" "$name" 
-		start-stop-daemon --start --quiet --pidfile $PIDFILE --make-pidfile --exec $CONF_ZK_BIN/zookeeper-server-start -- -daemon $CONF_ZK_PROPERTIES 
+		start-stop-daemon --quiet --chuid $CONF_ZK_USER --pidfile $PIDFILE  --exec $CONF_ZK_BIN/zookeeper-server-start --start -- -daemon $CONF_ZK_PROPERTIES 
 		exitCode=$?
 		log_end_msg $exitCode
 	else
 		echo -n $"Starting $desc ($name): "
 		daemon --user $CONF_ZK_USER --pidfile $PIDFILE $CONF_ZK_BIN/zookeeper-server-start -daemon $CONF_ZK_PROPERTIES 
 		exitCode=$?
-		if [ $exitCode -eq 0 ] ; then
-			PID=`pgrep -a -u $CONF_ZK_USER java | grep -e $CONF_ZK_PROPERTIES | cut -f1 -d' '`
-			echo $PID > $PIDFILE
-		fi
+		echo
 	fi
-	echo
+
+		# Because the startup scripts use nohup, we have to
+		# do our own computation of PID here.
+	if [ $exitCode -eq 0 ] ; then
+		PID=`pgrep -a -u $CONF_ZK_USER java | grep -e $CONF_ZK_PROPERTIES | cut -f1 -d' '`
+		echo $PID > $PIDFILE
+	fi
 	[ $exitCode -eq 0 ] && [ -d $RC_LOCK_DIR ] && touch $LOCKFILE
 	return $exitCode
 }

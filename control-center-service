@@ -5,11 +5,11 @@
 # description:  Enables Confluient Platform Schema Registry service
 #
 ### BEGIN INIT INFO
-# Provides:       control-center-service
+# Provides:       control-center
 # Required-Start: $network
 # Required-Stop:  $network
-# Should-Start:
-# Should-Stop:
+# Should-Start: cp-kafka cp-connect
+# Should-Stop: cp-kafka cp-connect
 # Default-Start:  3 5
 # Default-Stop:   0 1 2 6
 # Short-Description: Mangage Confluent Control Center service
@@ -71,19 +71,21 @@ LOCKFILE=$RC_LOCK_DIR/${name}
 do_start() {
 	if which start-stop-daemon &> /dev/null ; then
 		log_daemon_msg "Starting $desc" "$name" 
-		start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --exec $CONF_KAFKA_BIN/control-center-start -- -daemon $CONF_C3_PROPERTIES
+		start-stop-daemon --quiet --chuid $CONF_C3_USER --pidfile $PIDFILE --exec $CONF_KAFKA_BIN/control-center-start --start -- -daemon $CONF_C3_PROPERTIES
 		exitCode=$?
 		log_end_msg $exitCode
 	else
 		echo -n $"Starting $desc ($name): "
 		daemon --user $CONF_C3_USER --pidfile $PIDFILE $CONF_KAFKA_BIN/control-center-start -daemon $CONF_C3_PROPERTIES 
 		exitCode=$?
-		if [ $exitCode -eq 0 ] ; then
-			PID=`pgrep -a -u $CONF_C3_USER java | grep -e $CONF_C3_CLASS | cut -f1 -d' '`
-			echo $PID > $PIDFILE
-			exitCode=0
-		fi
 		echo
+	fi
+
+		# Because the startup scripts use nohup, we have to
+		# do our own computation of PID here.
+	if [ $exitCode -eq 0 ] ; then
+		PID=`pgrep -a -u $CONF_C3_USER java | grep -e $CONF_C3_CLASS | cut -f1 -d' '`
+		echo $PID > $PIDFILE
 	fi
 	[ $exitCode -eq 0 ] && [ -d $RC_LOCK_DIR ] && touch $LOCKFILE
 	return $exitCode
