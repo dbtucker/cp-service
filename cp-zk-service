@@ -91,6 +91,8 @@ do_start() {
 }
 
 do_stop() {
+	[ -s $PIDFILE ] && PID=`cat $PIDFILE`
+	[ -z "${PID:-}"  ] && $CONF_ZK_BIN/zookeeper-server-stop $CONF_ZK_PROPERTIES
 	if which start-stop-daemon &> /dev/null ; then
 		log_daemon_msg "Stopping $desc" "$name"
 		start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE 
