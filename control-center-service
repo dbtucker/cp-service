@@ -104,7 +104,17 @@ do_stop() {
 		else
 			PID=`pgrep -a -u $CONF_C3_USER java | grep -e $CONF_C3_CLASS | cut -f1 -d' '`
 		fi
-		[ -n "$PID" ] && kill -9 $PID 
+		if [ -n "$PID" ] ; then
+			kill -s TERM $PID 
+
+			local max_shutdown_wait=10
+			while [ $max_shutdown_wait -gt 0 ] ; do
+				kill -0 "$PID"
+				[ $? -eq 0 ] && break
+				sleep 1
+				max_shutdown_wait=$((max_shutdown_wait-1)
+			done
+		fi
 		exitCode=$?
 		echo
 	fi
