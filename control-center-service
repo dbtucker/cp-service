@@ -112,7 +112,7 @@ do_stop() {
 				kill -0 "$PID"
 				[ $? -eq 0 ] && break
 				sleep 1
-				max_shutdown_wait=$((max_shutdown_wait-1)
+				max_shutdown_wait=$(max_shutdown_wait-1)
 			done
 		fi
 		exitCode=$?
