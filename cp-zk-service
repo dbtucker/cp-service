@@ -83,7 +83,7 @@ do_start() {
 		# Because the startup scripts use nohup, we have to
 		# do our own computation of PID here.
 	if [ $exitCode -eq 0 ] ; then
-		PID=`pgrep -a -u $CONF_ZK_USER java | grep -e $CONF_ZK_PROPERTIES | cut -f1 -d' '`
+		PID=`pgrep -u $CONF_ZK_USER java | xargs --no-run-if-empty ps fp | grep -e $CONF_ZK_PROPERTIES | cut -f1 -d' '`
 		echo $PID > $PIDFILE
 	fi
 	[ $exitCode -eq 0 ] && [ -d $RC_LOCK_DIR ] && touch $LOCKFILE
@@ -103,7 +103,7 @@ do_stop() {
 		if [ -f $PIDFILE ] ; then
 			PID=$(cat $PIDFILE)
 		else
-			PID=`pgrep -a -u $CONF_ZK_USER java | grep -e $CONF_ZK_PROPERTIES | cut -f1 -d' '`
+			PID=`pgrep -u $CONF_ZK_USER java | xargs --no-run-if-empty ps fp | grep -e $CONF_ZK_PROPERTIES | cut -f1 -d' '`
 		fi
 		[ -n "$PID" ] && kill -9 $PID 
 		exitCode=$?
